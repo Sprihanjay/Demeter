@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import OnboardingScreen from "../components/OnboardingScreen";
 import HealthProfileSetup from "../components/HealthProfileSetup";
 import Dashboard from "../components/Dashboard";
@@ -8,12 +8,49 @@ import RecipesScreen from "../components/RecipesScreen";
 import HealthPlanScreen from "../components/HealthPlanScreen";
 import ProfileScreen from "../components/ProfileScreen";
 import BottomNav from "../components/BottomNav";
+import { auth } from "../firebaseConfig";
 
 const App = () => {
   const [currentScreen, setCurrentScreen] = useState<string>("onboarding");
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [scannedItems, setScannedItems] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // -------------------- Fetch health data on mount --------------------
+  useEffect(() => {
+    const checkHealthData = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://localhost:8080/healthdata/${user.uid}`);
+        if (res.ok) {
+          // Health data exists, skip profile setup
+          setCurrentScreen("home");
+        } else if (res.status === 404) {
+          // No health data, go to profile setup
+          setCurrentScreen("profile-setup");
+        } else {
+          console.warn("Unexpected response from healthdata endpoint", res.status);
+          setCurrentScreen("profile-setup");
+        }
+      } catch (err) {
+        console.error("Error fetching healthdata:", err);
+        setCurrentScreen("profile-setup");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkHealthData();
+  }, []);
+
+  if (loading) return <div>Loading...</div>;
+
+  // -------------------- Handlers --------------------
   const handleOnboardingNext = () => {
     if (onboardingStep < 3) {
       setOnboardingStep(onboardingStep + 1);
@@ -35,35 +72,19 @@ const App = () => {
     setCurrentScreen("home");
   };
 
+  // -------------------- Render screens --------------------
   const renderScreen = () => {
     switch (currentScreen) {
       case "onboarding":
-        return (
-          <OnboardingScreen
-            step={onboardingStep}
-            onNext={handleOnboardingNext}
-          />
-        );
+        return <OnboardingScreen step={onboardingStep} onNext={handleOnboardingNext} />;
       case "profile-setup":
         return <HealthProfileSetup onComplete={handleProfileComplete} />;
       case "home":
         return <Dashboard onNavigate={setCurrentScreen} />;
       case "scan":
-        return (
-          <ReceiptScanScreen
-            onBack={() => setCurrentScreen("home")}
-            onNavigate={setCurrentScreen} // pass this for redirect
-          />
-        );
-
+        return <ReceiptScanScreen onBack={() => setCurrentScreen("home")} onNavigate={setCurrentScreen} />;
       case "receipt-confirm":
-        return (
-          <ReceiptConfirmScreen
-            items={scannedItems}
-            onConfirm={handleReceiptConfirm}
-            onBack={() => setCurrentScreen("scan")}
-          />
-        );
+        return <ReceiptConfirmScreen items={scannedItems} onConfirm={handleReceiptConfirm} onBack={() => setCurrentScreen("scan")} />;
       case "recipes":
         return <RecipesScreen />;
       case "health-plan":
@@ -75,23 +96,13 @@ const App = () => {
     }
   };
 
-  const showBottomNav = ![
-    "onboarding",
-    "profile-setup",
-    "scan",
-    "receipt-confirm",
-  ].includes(currentScreen);
+  const showBottomNav = !["onboarding", "profile-setup", "scan", "receipt-confirm"].includes(currentScreen);
 
   return (
     <div className="flex items-center justify-center h-screen bg-gray-100">
       <div className="relative w-full max-w-[390px] h-screen bg-white shadow-2xl overflow-hidden">
         {renderScreen()}
-        {showBottomNav && (
-          <BottomNav
-            currentScreen={currentScreen}
-            onNavigate={setCurrentScreen}
-          />
-        )}
+        {showBottomNav && <BottomNav currentScreen={currentScreen} onNavigate={setCurrentScreen} />}
       </div>
     </div>
   );
