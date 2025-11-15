@@ -9,7 +9,7 @@ import HealthPlanScreen from "../components/HealthPlanScreen";
 import ProfileScreen from "../components/ProfileScreen";
 import BottomNav from "../components/BottomNav";
 
-export default function App() {
+const App = () => {
   const [currentScreen, setCurrentScreen] = useState<string>("onboarding");
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [scannedItems, setScannedItems] = useState<string[]>([]);
@@ -94,4 +94,6 @@ export default function App() {
       </div>
     </div>
   );
-}
+};
+
+export default App;
