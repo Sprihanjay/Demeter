@@ -1,6 +1,16 @@
-import { User, Heart, Bell, Lock, HelpCircle, LogOut, ChevronRight, Settings } from 'lucide-react';
-import { Card } from './ui/card';
-import { Switch } from './ui/switch';
+import {
+  User,
+  Heart,
+  Bell,
+  Lock,
+  HelpCircle,
+  LogOut,
+  ChevronRight,
+  Settings,
+} from "lucide-react";
+import { Card } from "./ui/card";
+import { Switch } from "./ui/switch";
+import { logout } from "../firebaseConfig";
 
 export default function ProfileScreen() {
   return (
@@ -105,7 +115,7 @@ export default function ProfileScreen() {
         <Card className="p-4 bg-white mb-4">
           <button className="flex items-center gap-3 w-full py-2 text-red-600">
             <LogOut size={20} />
-            <span>Log Out</span>
+            <span onClick={() => logout()}>Log Out</span>
           </button>
         </Card>
 
