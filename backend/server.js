@@ -45,7 +45,27 @@ app.post("/upload", upload.single("file"), async (req, res) => {
     // User-specific path
     const timestamp = Date.now();
     const filename = `${timestamp}-${req.file.originalname}`;
-    const storagePath = `${folder}/${uid}/${filename}`;
+
+    // Allow caller to override folder via form field 'folder'. If provided,
+    // construct path as <uid>/<folder>/<filename>. Otherwise fall back to
+    // the default behavior: <folder>/<uid>/<filename> for backwards compat.
+    let storagePath;
+    if (req.body && req.body.folder) {
+      // Normalize folder: convert backslashes to slashes, trim slashes,
+      // and lowercase segments to produce predictable paths.
+      const rawFolder = String(req.body.folder || "");
+      const normalized = rawFolder
+        .replace(/\\/g, "/")
+        .split("/")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((s) => s.toLowerCase())
+        .join("/");
+
+      storagePath = `${uid}/${normalized}/${filename}`;
+    } else {
+      storagePath = `${folder}/${uid}/${filename}`;
+    }
     const file = bucket.file(storagePath);
 
     // Upload to Firebase Storage
