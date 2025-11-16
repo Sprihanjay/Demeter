@@ -24,58 +24,18 @@ import {
   Dialog,
   DialogContent,
 } from "../components/ui/dialog";
-import { getCategorization, type CategorizationResult } from "../src/utils/healthPlanService";
+import { getCategorization } from "../src/utils/healthPlanService";
 import { auth } from "../firebaseConfig";
 
 import { uploadBookmarkedRecipe } from "../src/utils/uploadService";
 
 import TextToSpeech from "./TextToSpeech";
-import { FavoriteRecipes } from "./FavoriteRecipes";
-
-// Mock fridge ingredients
-const FRIDGE_INGREDIENTS = ["chicken", "fish", "poop"];
-
-// Ingredients the user cannot eat
-const EXCLUDE_INGREDIENTS = [""];
-
-// Cuisine filter list
-const CUISINES = [
-  { value: "italian", label: "Italian" },
-  { value: "mexican", label: "Mexican" },
-  { value: "chinese", label: "Chinese" },
-  { value: "indian", label: "Indian" },
-  { value: "japanese", label: "Japanese" },
-  { value: "thai", label: "Thai" },
-  { value: "mediterranean", label: "Mediterranean" },
-  { value: "american", label: "American" },
-  { value: "french", label: "French" },
-  { value: "greek", label: "Greek" },
-];
-
-// Diet list
-const DIETS = [
-  { value: "vegetarian", label: "Vegetarian" },
-  { value: "vegan", label: "Vegan" },
-  { value: "gluten free", label: "Gluten Free" },
-  { value: "ketogenic", label: "Keto" },
-  { value: "paleo", label: "Paleo" },
-  { value: "pescetarian", label: "Pescetarian" },
-  { value: "whole30", label: "Whole30" },
-];
-
-interface RecipeFilters {
-  cuisine: string;
-  diet: string;
-  includeIngredients: string[];
-  excludeIngredients: string[];
-}
 
 interface RecipesScreenProps {
   onNavigate?: (screen: string) => void;
 }
 
 export default function App({ onNavigate }: RecipesScreenProps) {
-export default function App() {
   const [recipeList, setRecipeList] = useState<RecipeDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -226,15 +186,15 @@ export default function App() {
     }
   };
 
-  const clearFilters = () => {
-    setFilters((prev) => ({
-      ...prev,
-      cuisine: "",
-      diet: "",
-    }));
-  };
+  // const clearFilters = () => {
+  //   setFilters((prev) => ({
+  //     ...prev,
+  //     cuisine: "",
+  //     diet: "",
+  //   }));
+  // };
 
-  const hasActiveFilters = filters.cuisine || filters.diet;
+  // const hasActiveFilters = filters.cuisine || filters.diet;
 
   const uploadSavedRecipesSet = async (recipesSet: Set<number>) => {
     const user = auth.currentUser;
