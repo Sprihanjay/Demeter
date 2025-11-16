@@ -43,13 +43,14 @@ export default function HealthProfileSetup({ onComplete }: HealthProfileSetupPro
   });
 
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string }[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function saveHealthProfile() {
+  async function saveHealthProfile(): Promise<boolean> {
     const user = auth.currentUser;
     if (!user) {
       console.error("No user logged in — cannot upload health profile.");
-      return;
+      return false;
     }
 
     const profileData = {
@@ -69,16 +70,20 @@ export default function HealthProfileSetup({ onComplete }: HealthProfileSetupPro
       { type: "application/json" }
     );
 
-    uploadPatientSetupInfo(
-      file,
-      user.uid,
-      (data) => {
-        console.log("Health profile uploaded:", data);
-      },
-      (error) => {
-        console.error("Error uploading health profile:", error);
-      }
-    );
+    return new Promise((resolve) => {
+      uploadPatientSetupInfo(
+        file,
+        user.uid,
+        (data) => {
+          console.log("Health profile uploaded:", data);
+          resolve(true);
+        },
+        (error) => {
+          console.error("Error uploading health profile:", error);
+          resolve(false);
+        }
+      );
+    });
   }
 
   function formatLabel(key: string) {
@@ -346,12 +351,19 @@ export default function HealthProfileSetup({ onComplete }: HealthProfileSetupPro
       <div className="px-6 py-6 border-t bg-white">
         <Button
           onClick={async () => {
-            await saveHealthProfile();
-            onComplete();
+            setIsSaving(true);
+            const success = await saveHealthProfile();
+            setIsSaving(false);
+            if (success) {
+              onComplete();
+            } else {
+              alert("Failed to save health profile. Please try again.");
+            }
           }}
           className="w-full"
+          disabled={isSaving}
         >
-          Complete Setup
+          {isSaving ? "Saving..." : "Complete Setup"}
         </Button>
       </div>
     </div>

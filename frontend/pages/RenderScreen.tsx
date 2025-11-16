@@ -66,7 +66,20 @@ const App = () => {
     }
   };
 
-  const handleProfileComplete = () => {
+  const handleProfileComplete = async () => {
+    // Refetch health data after profile setup
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        const res = await fetch(`http://localhost:8080/${user.uid}/healthdata`);
+        if (res.ok) {
+          const data = await res.json();
+          setHealthProfile(data);
+        }
+      } catch (err) {
+        console.error("Error fetching updated healthdata:", err);
+      }
+    }
     setCurrentScreen("home");
   };
 
