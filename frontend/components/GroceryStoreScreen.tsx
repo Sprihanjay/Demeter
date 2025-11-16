@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, MapPin, Navigation, Clock, ExternalLink } from "lucide-react";
+import { ArrowLeft, MapPin, Navigation, Clock, Star } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 
 interface GroceryStore {
   place_id: string;
@@ -82,31 +83,23 @@ export default function GroceryStoreScreen({ onBack }: GroceryStoreScreenProps) 
   };
 
   useEffect(() => {
-    // console.log("[GROCERY] Component mounted, requesting location");
-    // Get user's current location
     if (navigator.geolocation) {
-      // console.log("[GROCERY] Geolocation API available");
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          // console.log("[GROCERY] Location received:", position.coords);
           const location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
           };
-          // console.log("[GROCERY] Parsed location:", location);
           setUserLocation(location);
           fetchNearbyGroceryStores(location);
         },
         (error) => {
           console.error("[GROCERY] Error getting location:", error);
-          // console.error("[GROCERY] Error code:", error.code);
-          // console.error("[GROCERY] Error message:", error.message);
           setError(`Unable to get your location: ${error.message}. Please enable location services.`);
           setLoading(false);
         }
       );
     } else {
-      console.error("[GROCERY] Geolocation not supported");
       setError("Geolocation is not supported by your browser.");
       setLoading(false);
     }
@@ -137,19 +130,19 @@ export default function GroceryStoreScreen({ onBack }: GroceryStoreScreenProps) 
   return (
     <div className="flex flex-col h-full bg-gray-50 pb-20">
       {/* Header */}
-      <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-6 py-6 text-white shadow-lg">
-        <div className="flex items-center gap-4">
+      <div className="bg-gradient-to-br from-blue-600 to-blue-700 px-4 py-3 text-white shadow-lg">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={onBack}
-            className="text-white hover:bg-white/20"
+            className="text-white hover:bg-white/20 h-8 w-8"
           >
-            <ArrowLeft size={24} />
+            <ArrowLeft size={20} />
           </Button>
           <div>
-            <h1 className="text-white">Nearby Grocery Stores</h1>
-            <p className="text-white/80 mt-1">Find stores near you</p>
+            <h1 className="text-white text-lg font-semibold">Nearby Grocery Stores</h1>
+            <p className="text-white/80 text-xs">Find stores near you</p>
           </div>
         </div>
       </div>
@@ -188,78 +181,72 @@ export default function GroceryStoreScreen({ onBack }: GroceryStoreScreenProps) 
         )}
 
         {!loading && !error && stores.length > 0 && (
-          <div className="space-y-3">
-            {stores.map((store) => (
-              <Card
-                key={store.place_id}
-                className="p-4 bg-white hover:shadow-lg transition-shadow duration-300 cursor-pointer"
-                onClick={() => openInGoogleMaps(store)}
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <h3 className="text-gray-900 mb-1">{store.name}</h3>
-                    <div className="flex items-center gap-2 text-gray-600 mb-2">
-                      <MapPin size={16} className="flex-shrink-0" />
-                      <span className="text-sm">{store.vicinity}</span>
+          <div className="space-y-4">
+            {stores.map((store) => {
+              const distance = userLocation
+                ? calculateDistance(
+                    userLocation.lat,
+                    userLocation.lng,
+                    store.geometry.location.lat,
+                    store.geometry.location.lng
+                  )
+                : null;
+
+              return (
+                <Card
+                  key={store.place_id}
+                  className="p-5 bg-white hover:shadow-xl transition-all duration-300 border-l-4 border-l-blue-500"
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <MapPin className="text-blue-600" size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                        {store.name}
+                      </h3>
+                      <div className="text-sm text-gray-600">
+                        {store.vicinity}
+                      </div>
                     </div>
                   </div>
-                  <ExternalLink className="text-blue-600 flex-shrink-0 ml-2" size={20} />
-                </div>
 
-                <div className="flex flex-wrap gap-3 items-center">
-                  {userLocation && (
-                    <div className="flex items-center gap-1 text-gray-700">
-                      <Navigation size={16} className="text-blue-600" />
-                      <span className="text-sm">
-                        {calculateDistance(
-                          userLocation.lat,
-                          userLocation.lng,
-                          store.geometry.location.lat,
-                          store.geometry.location.lng
-                        )}{" "}
-                        mi
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {distance && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <Navigation size={14} />
+                        <span>{distance} mi</span>
+                      </Badge>
+                    )}
 
-                  {store.rating && (
-                    <div className="flex items-center gap-1 text-gray-700">
-                      <span className="text-yellow-500">⭐</span>
-                      <span className="text-sm">{store.rating.toFixed(1)}</span>
-                    </div>
-                  )}
+                    {store.rating && (
+                      <Badge variant="secondary" className="flex items-center gap-1">
+                        <Star size={14} className="fill-yellow-400 text-yellow-400" />
+                        <span>{store.rating.toFixed(1)}</span>
+                      </Badge>
+                    )}
 
-                  {store.opening_hours && (
-                    <div className="flex items-center gap-1">
-                      <Clock size={16} className="text-green-600" />
-                      <span
-                        className={`text-sm ${
-                          store.opening_hours.open_now
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
+                    {store.opening_hours && (
+                      <Badge
+                        variant={store.opening_hours.open_now ? "default" : "destructive"}
+                        className="flex items-center gap-1"
                       >
-                        {store.opening_hours.open_now ? "Open now" : "Closed"}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                        <Clock size={14} />
+                        <span>{store.opening_hours.open_now ? "Open Now" : "Closed"}</span>
+                      </Badge>
+                    )}
+                  </div>
 
-                <div className="mt-3 pt-3 border-t flex gap-2">
                   <Button
-                    size="sm"
-                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openInGoogleMaps(store);
-                    }}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    onClick={() => openInGoogleMaps(store)}
                   >
-                    <Navigation size={16} className="mr-2" />
+                    <Navigation size={18} className="mr-2" />
                     Get Directions
                   </Button>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
