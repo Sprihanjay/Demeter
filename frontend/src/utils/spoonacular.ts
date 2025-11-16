@@ -24,6 +24,26 @@ export interface RecipeDetails {
   dairyFree?: boolean;
 }
 
+export interface FindByIngredientsRecipe {
+  id: number;
+  title: string;
+  image: string;
+  usedIngredientCount: number;
+  missedIngredientCount: number;
+  usedIngredients: Array<{
+    name: string;
+    original: string;
+    amount: number;
+    unit: string;
+  }>;
+  missedIngredients: Array<{
+    name: string;
+    original: string;
+    amount: number;
+    unit: string;
+  }>;
+}
+
 /**
  * Search recipes by ingredients with optional filters
  */
@@ -145,4 +165,67 @@ export async function searchRecipesByQuery(
     console.error("Error searching by query:", error);
     return [];
   }
+}
+
+export async function findRecipesByIngredients(
+  ingredients: string[],
+  number: number = 10,
+  ranking: 1 | 2 = 1, // 1 = max used ingredients, 2 = min missing
+  ignorePantry: boolean = true
+): Promise<FindByIngredientsRecipe[]> {
+  if (!API_KEY) {
+    console.error("API key is not set");
+    return [];
+  }
+
+  if (!ingredients || ingredients.length === 0) {
+    console.warn("No ingredients provided to findRecipesByIngredients");
+    return [];
+  }
+  // Example:
+  // GET /recipes/findByIngredients?ingredients=apples,flour&number=2&ranking=1&ignorePantry=true
+  const params = new URLSearchParams({
+    ingredients: ingredients.join(","),
+    number: number.toString(),
+    ranking: ranking.toString(),
+    ignorePantry: ignorePantry.toString(),
+    apiKey: API_KEY,
+  });
+
+  const url = `https://api.spoonacular.com/recipes/findByIngredients?${params.toString()}`;
+  console.log("Fetching URL:", url);
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+    const data = await response.json();
+    return data as FindByIngredientsRecipe[];
+  } catch (err) {
+    console.error("Error finding recipes by ingredients:", err);
+    return [];
+  }
+}
+
+export async function getRecipeInformationBulk(
+  ids: number[],
+  includeNutrition: boolean = false
+) {
+  if (!ids || ids.length === 0) return [];
+
+  const params = new URLSearchParams({
+    ids: ids.join(","),
+    includeNutrition: String(includeNutrition),
+    apiKey: API_KEY, 
+  });
+
+  const url = `https://api.spoonacular.com/recipes/informationBulk?${params.toString()}`;
+
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    throw new Error(`Bulk info fetch failed: ${res.statusText}`);
+  }
+
+  return res.json(); // returns an array of recipes
 }
