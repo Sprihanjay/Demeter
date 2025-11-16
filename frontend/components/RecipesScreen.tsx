@@ -1,41 +1,33 @@
 import {
   Heart,
-  X,
   Clock,
   Users,
-  Flame,
   Star,
-  ChevronLeft,
   Refrigerator,
   ChefHat,
-  TrendingUp,
   Sparkles,
-  SlidersHorizontal,
   Utensils,
   CheckCircle2,
-  PlayCircle,
+  Loader2,
 } from "lucide-react";
-import { useState, useEffect, useCallback, use } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "../components/ui/card";
 import { ImageWithFallback } from "../components/figma/ImageWithFallback";
 import {
-  searchRecipes,
-  getRecipeInformation,
+  findRecipesByIngredients,
   type RecipeDetails,
+  getRecipeInformationBulk,
 } from "../src/utils/spoonacular";
 import { Button } from "../components/ui/button";
 import { Badge } from "../components/ui/badge";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
 } from "../components/ui/dialog";
+import { getCategorization, type CategorizationResult } from "../src/utils/healthPlanService";
+import { auth } from "../firebaseConfig";
 
 import { uploadBookmarkedRecipe } from "../src/utils/uploadService";
-import { auth } from "../firebaseConfig";
 
 import TextToSpeech from "./TextToSpeech";
 import { FavoriteRecipes } from "./FavoriteRecipes";
@@ -83,6 +75,7 @@ interface RecipesScreenProps {
 }
 
 export default function App({ onNavigate }: RecipesScreenProps) {
+export default function App() {
   const [recipeList, setRecipeList] = useState<RecipeDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,17 +84,66 @@ export default function App({ onNavigate }: RecipesScreenProps) {
   );
   const [loadingRecipeDetails, setLoadingRecipeDetails] = useState(false);
   const [savedRecipes, setSavedRecipes] = useState<Set<number>>(new Set());
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isRecipeModalOpen, setIsRecipeModalOpen] = useState(false);
-  // test
   const [selectedRecipeSteps, setSelectedRecipeSteps] = useState<string>("");
+  const [includeIngredients, setIncludeIngredients] = useState<string[]>([]);
+  const [excludeIngredients, setExcludeIngredients] = useState<string[]>([]);
+  const [loadingIngredients, setLoadingIngredients] = useState(true);
 
-  const [filters, setFilters] = useState<RecipeFilters>({
-    includeIngredients: [...FRIDGE_INGREDIENTS],
-    excludeIngredients: [...EXCLUDE_INGREDIENTS],
-    cuisine: "",
-    diet: "",
-  });
+  // Fetch categorization data on mount
+  useEffect(() => {
+    console.log("🔍 RecipesScreen: useEffect triggered - starting to fetch categorization data");
+    
+    const fetchCategorizationData = async () => {
+      console.log("📊 RecipesScreen: Setting loadingIngredients to true");
+      setLoadingIngredients(true);
+      
+      try {
+        console.log("👤 RecipesScreen: Checking current user from auth");
+        const user = auth.currentUser;
+        console.log("👤 RecipesScreen: Current user:", user ? `UID: ${user.uid}` : "No user signed in");
+        
+        if (!user) {
+          console.error("❌ RecipesScreen: No user signed in");
+          setError("Please sign in to view recipes");
+          setLoadingIngredients(false);
+          return;
+        }
+
+        console.log("💾 RecipesScreen: Attempting to get cached categorization data");
+        // Try to get cached categorization data
+        const cachedData = getCategorization();
+        console.log("💾 RecipesScreen: Cached data result:", cachedData);
+        
+        if (cachedData) {
+          console.log("✅ RecipesScreen: Found cached data:", {
+            include: cachedData.include,
+            exclude: cachedData.exclude,
+            timestamp: cachedData.timestamp
+          });
+          
+          setIncludeIngredients(cachedData.include || []);
+          setExcludeIngredients(cachedData.exclude || []);
+          
+          console.log("✅ RecipesScreen: Successfully set ingredients:", {
+            includeCount: (cachedData.include || []).length,
+            excludeCount: (cachedData.exclude || []).length
+          });
+        } else {
+          console.warn("⚠️ RecipesScreen: No cached categorization data found");
+          setError("No health plan data found. Please complete your health profile setup first.");
+        }
+      } catch (err) {
+        console.error("❌ RecipesScreen: Error loading categorization data:", err);
+        setError("Failed to load ingredient preferences");
+      } finally {
+        console.log("🏁 RecipesScreen: Setting loadingIngredients to false");
+        setLoadingIngredients(false);
+      }
+    };
+
+    fetchCategorizationData();
+  }, []);
 
   const getRecipeSteps = (recipe: RecipeDetails) => {
     if (
@@ -118,61 +160,70 @@ export default function App({ onNavigate }: RecipesScreenProps) {
     }
   };
 
-  // Memoized fetch function to prevent infinite loops
-  const handleGetRecipes = useCallback(async () => {
+  const handleGetRecipes = async () => {
+    console.log("🔍 RecipesScreen: handleGetRecipes called");
+    console.log("📝 RecipesScreen: Include ingredients:", includeIngredients);
+    console.log("📝 RecipesScreen: Exclude ingredients:", excludeIngredients);
+
+    if (includeIngredients.length === 0) {
+      console.error("❌ RecipesScreen: No include ingredients available");
+      setError("No ingredients available. Please complete your health profile setup first.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      console.log("Fetching recipes with filters:", {
-        ingredients: filters.includeIngredients,
-        excluded: filters.excludeIngredients,
-        cuisine: filters.cuisine,
-        diet: filters.diet,
+      console.log("🔎 RecipesScreen: Searching recipes with ingredients:", includeIngredients);
+      // Get recipes matching fridge ingredients
+      const good_recipes = await findRecipesByIngredients(
+        includeIngredients,
+        10,
+        1,
+        true
+      );
+      console.log("✅ RecipesScreen: Found recipes:", good_recipes.length);
+
+      const good_ids = good_recipes.map((r) => r.id);
+      console.log("📋 RecipesScreen: Recipe IDs:", good_ids);
+
+      // Bulk fetch full info
+      console.log("📊 RecipesScreen: Fetching bulk recipe information");
+      const full_info = await getRecipeInformationBulk(good_ids, true);
+      console.log("✅ RecipesScreen: Retrieved full info for", full_info.length, "recipes");
+
+      // Lowercase the excluded ingredients
+      const loweredBad = excludeIngredients.map((b) => b.toLowerCase());
+      console.log("🚫 RecipesScreen: Lowercased excluded ingredients:", loweredBad);
+
+      // Filter recipes that do not contain any excluded ingredient
+      const valid_recipes = full_info.filter((recipe: any) => {
+        if (!recipe.extendedIngredients) return true;
+
+        const ingredients = recipe.extendedIngredients
+          .map((i: any) => i.name.toLowerCase())
+          .filter(Boolean);
+
+        // Use substring match for multi-word ingredients
+        const hasBadIngredient = ingredients.some((ing: string) =>
+          loweredBad.some((bad) => ing.includes(bad))
+        );
+
+        return !hasBadIngredient;
       });
 
-      const recipes = await searchRecipes(
-        filters.includeIngredients,
-        filters.excludeIngredients,
-        filters.cuisine || undefined,
-        filters.diet || undefined,
-        10
-      );
-
-      console.log("Fetched recipes:", recipes.length, recipes);
-
-      if (recipes.length === 0) {
-        setError(
-          "No recipes found with these ingredients. Try different ones!"
-        );
-      }
-
-      setRecipeList(recipes);
+      console.log("✅ RecipesScreen: Valid recipes after filtering:", valid_recipes.length);
+      setRecipeList(valid_recipes);
+      console.log("📋 RecipesScreen: Final recipe list:", valid_recipes);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to fetch recipes";
-      console.error("Error fetching recipes:", err);
-      setError(message);
+      console.error("❌ RecipesScreen: Error fetching recipes:", err);
+      setError("Failed to fetch recipes. Please try again.");
       setRecipeList([]);
     } finally {
+      console.log("🏁 RecipesScreen: Setting loading to false");
       setLoading(false);
     }
-  }, [filters]);
-
-  // Fetch recipes on mount
-  useEffect(() => {
-    handleGetRecipes();
-  }, []);
-
-  // Refetch when filters change
-  useEffect(() => {
-    if (recipeList.length > 0) {
-      handleGetRecipes();
-    }
-  }, [filters.cuisine, filters.diet]);
-
-  const updateFilter = (key: keyof RecipeFilters, value: string | string[]) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const clearFilters = () => {
@@ -243,37 +294,31 @@ export default function App({ onNavigate }: RecipesScreenProps) {
 
   const handleRecipeClick = async (recipe: RecipeDetails) => {
     setLoadingRecipeDetails(true);
-    setIsRecipeModalOpen(true);
-
-    try {
-      // Fetch full recipe details
-      const fullRecipe = await getRecipeInformation(recipe.id);
-      if (fullRecipe) {
-        setSelectedRecipe(fullRecipe);
-      } else {
-        setSelectedRecipe(recipe);
-      }
-    } catch (err) {
-      console.error("Error fetching recipe details:", err);
-      setSelectedRecipe(recipe);
-    } finally {
-      setLoadingRecipeDetails(false);
-    }
-  };
-
-  const closeRecipeModal = () => {
-    setIsRecipeModalOpen(false);
-    setTimeout(() => setSelectedRecipe(null), 300);
+    setSelectedRecipe(recipe);
+    setLoadingRecipeDetails(false);
   };
 
   // ------------------- Render -------------------
+  
+  // Show loading state while fetching ingredients
+  if (loadingIngredients) {
+    return (
+      <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 size={48} className="animate-spin text-violet-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading your personalized recipes...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 pb-20 overflow-y-auto">
       {/* Mobile-Optimized Header */}
       <div className="bg-white/90 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-40">
-        <div className="px-4 py-4 md:px-6 md:py-6">
+        <div className="px-4 pt-4 md:px-6 md:py-6">
           {" "}
-          {/* croll */}
+          {/* Scroll */}
           <div className="flex items-start justify-between mb-4 md:mb-6">
             <div className="flex-1">
               <p className="text-gray-500 text-xs md:text-sm mb-1 flex items-center gap-1.5">
@@ -282,7 +327,7 @@ export default function App({ onNavigate }: RecipesScreenProps) {
               </p>
               <h1 className="text-gray-900 mb-1">Recipes from Your Fridge</h1>
               <p className="text-gray-600 text-sm">
-                {filters.includeIngredients.length} ingredients ready
+                {includeIngredients.length} ingredients ready
               </p>
             </div>
             <Button
@@ -303,119 +348,23 @@ export default function App({ onNavigate }: RecipesScreenProps) {
                 Available Ingredients
               </span>
             </div>
-            <div className="overflow-x-auto -mx-4 px-4 scrollbar-hidden">
-              <div className="flex gap-2 pb-2">
-                {filters.includeIngredients.map((ingredient, index) => (
-                  <Badge
-                    key={index}
-                    variant="secondary"
-                    className="bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200 border rounded-full px-3 py-1 text-xs whitespace-nowrap flex-shrink-0"
-                  >
-                    {ingredient}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          </div>
-          {/* Filter Button */}
-          <div className="flex items-center gap-2">
-            <Dialog open={isFilterOpen} onOpenChange={setIsFilterOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="flex-1 sm:flex-initial rounded-full border-gray-200 bg-white gap-2 relative"
-                >
-                  <SlidersHorizontal size={16} />
-                  <span>Filters</span>
-                  {hasActiveFilters && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-violet-600 text-white p-0 flex items-center justify-center text-xs">
-                      {[filters.cuisine, filters.diet].filter(Boolean).length}
-                    </Badge>
-                  )}
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="rounded-t-3xl px-6 pb-8">
-                <DialogHeader className="px-0">
-                  <DialogTitle>Filter Recipes</DialogTitle>
-                  <DialogDescription>
-                    Customize your recipe search preferences
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="w-full h-full mt-8 space-y-8 px-1">
-                  {/* Cuisine Filter */}
-                  <div>
-                    <label className="text-sm mb-4 block text-gray-700">
-                      Cuisine Type
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {CUISINES.map((cuisine) => (
-                        <Button
-                          key={cuisine.value}
-                          variant={
-                            filters.cuisine === cuisine.value
-                              ? "default"
-                              : "outline"
-                          }
-                          className={`rounded-full h-11 ${
-                            filters.cuisine === cuisine.value
-                              ? "bg-gradient-to-r from-violet-600 to-purple-600"
-                              : ""
-                          }`}
-                          onClick={() => updateFilter("cuisine", cuisine.value)}
-                        >
-                          {cuisine.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Diet Filter */}
-                  <div>
-                    <label className="text-sm mb-4 block text-gray-700">
-                      Dietary Preferences
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {DIETS.map((diet) => (
-                        <Button
-                          key={diet.value}
-                          variant={
-                            filters.diet === diet.value ? "default" : "outline"
-                          }
-                          className={`rounded-full h-11 ${
-                            filters.diet === diet.value
-                              ? "bg-gradient-to-r from-violet-600 to-purple-600"
-                              : ""
-                          }`}
-                          onClick={() => updateFilter("diet", diet.value)}
-                        >
-                          {diet.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3 pt-6 pb-2">
-                    {hasActiveFilters && (
-                      <Button
-                        variant="outline"
-                        onClick={clearFilters}
-                        className="flex-1 rounded-full h-12"
-                      >
-                        Clear All
-                      </Button>
-                    )}
-                    <Button
-                      onClick={() => setIsFilterOpen(false)}
-                      className="flex-1 rounded-full h-12 bg-gradient-to-r from-violet-600 to-purple-600"
+            {includeIngredients.length > 0 ? (
+              <div className="overflow-x-auto -mx-4 px-4 scrollbar-hidden">
+                <div className="flex gap-2 pb-2">
+                  {includeIngredients.map((ingredient, index) => (
+                    <Badge
+                      key={index}
+                      variant="secondary"
+                      className="bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200 border rounded-full px-3 py-1 text-xs whitespace-nowrap flex-shrink-0"
                     >
-                      Apply Filters
-                    </Button>
-                  </div>
+                      {ingredient}
+                    </Badge>
+                  ))}
                 </div>
-              </DialogContent>
-            </Dialog>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No ingredients available</p>
+            )}
           </div>
         </div>
       </div>
@@ -445,11 +394,14 @@ export default function App({ onNavigate }: RecipesScreenProps) {
           </div>
         ) : recipeList.length > 0 ? (
           <div className="grid grid-cols-1 gap-4">
-            {recipeList.map((recipe) => (
+            {recipeList.map((recipe, index) => (
               <Card
                 key={recipe.id}
+                onClick={() => {
+                  handleRecipeClick(recipe);
+                  setIsRecipeModalOpen(true);
+                }}
                 className="group overflow-hidden bg-white active:scale-[0.98] transition-all duration-300 border-0 shadow-md cursor-pointer rounded-2xl hover:shadow-lg"
-                onClick={() => handleRecipeClick(recipe)}
               >
                 <div className="relative h-56 bg-gradient-to-br from-gray-100 to-gray-50 overflow-hidden">
                   <ImageWithFallback
@@ -500,17 +452,24 @@ export default function App({ onNavigate }: RecipesScreenProps) {
               </Card>
             ))}
           </div>
+        ) : includeIngredients.length === 0 ? (
+          <Card className="p-16 text-center bg-white border-0 shadow-sm rounded-3xl">
+            <h3 className="text-gray-900 mb-2">No ingredients available</h3>
+            <p className="text-gray-600 mb-4 text-sm">
+              Please complete your health profile setup to get personalized recipes
+            </p>
+          </Card>
         ) : (
           <Card className="p-16 text-center bg-white border-0 shadow-sm rounded-3xl">
             <h3 className="text-gray-900 mb-2">No recipes found</h3>
             <p className="text-gray-600 mb-4 text-sm">
-              Try adjusting your ingredients or filters
+              Search by ingredients in your fridge
             </p>
             <Button
               onClick={() => handleGetRecipes()}
               className="bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-full px-8 py-6 shadow-lg"
             >
-              Try Again
+              Search for Recipes
             </Button>
           </Card>
         )}
@@ -540,14 +499,6 @@ export default function App({ onNavigate }: RecipesScreenProps) {
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-                {/* Close Button */}
-                {/* <button
-                  onClick={closeRecipeModal}
-                  className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2 hover:bg-white transition-all size-6"
-                >
-                  <X size={20} className="text-gray-900" />
-                </button> */}
 
                 {/* Save Button */}
                 <button
@@ -643,7 +594,7 @@ export default function App({ onNavigate }: RecipesScreenProps) {
                       </div>
                       <div className="space-y-2">
                         {selectedRecipe.extendedIngredients.map(
-                          (ingredient, index) => (
+                          (ingredient: any, index: number) => (
                             <div
                               key={index}
                               className="flex items-start gap-2 text-sm text-gray-700"
