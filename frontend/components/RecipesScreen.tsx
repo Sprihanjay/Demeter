@@ -34,7 +34,11 @@ import {
   DialogTrigger,
 } from "../components/ui/dialog";
 
+import { uploadBookmarkedRecipe } from "../src/utils/uploadService";
+import { auth } from "../firebaseConfig";
+
 import TextToSpeech from "./TextToSpeech";
+import { FavoriteRecipes } from "./FavoriteRecipes";
 
 // Mock fridge ingredients
 const FRIDGE_INGREDIENTS = ["chicken", "fish", "poop"];
@@ -67,7 +71,6 @@ const DIETS = [
   { value: "whole30", label: "Whole30" },
 ];
 
-// Filter type
 interface RecipeFilters {
   cuisine: string;
   diet: string;
@@ -75,7 +78,11 @@ interface RecipeFilters {
   excludeIngredients: string[];
 }
 
-export default function App() {
+interface RecipesScreenProps {
+  onNavigate?: (screen: string) => void;
+}
+
+export default function App({ onNavigate }: RecipesScreenProps) {
   const [recipeList, setRecipeList] = useState<RecipeDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +185,37 @@ export default function App() {
 
   const hasActiveFilters = filters.cuisine || filters.diet;
 
+  const uploadSavedRecipesSet = async (recipesSet: Set<number>) => {
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("No user logged in — cannot upload saved recipes.");
+      return;
+    }
+
+    const recipesData = {
+      savedRecipeIds: Array.from(recipesSet),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const jsonString = JSON.stringify(recipesData, null, 2);
+    const file = new File(
+      [new Blob([jsonString], { type: "application/json" })],
+      "savedRecipes.json",
+      { type: "application/json" }
+    );
+
+    uploadBookmarkedRecipe(
+      file,
+      user.uid,
+      (data) => {
+        console.log("Saved recipes uploaded:", data);
+      },
+      (error) => {
+        console.error("Error uploading saved recipes:", error);
+      }
+    );
+  };
+
   const toggleSaveRecipe = (id: number) => {
     const updated = new Set(savedRecipes);
     if (updated.has(id)) {
@@ -186,6 +224,8 @@ export default function App() {
       updated.add(id);
     }
     setSavedRecipes(updated);
+    // Upload the updated set to Firebase
+    uploadSavedRecipesSet(updated);
   };
 
   useEffect(() => {
@@ -248,6 +288,7 @@ export default function App() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => onNavigate?.("meal-prep")}
               className="rounded-full border-gray-200 hover:bg-gray-50 gap-1.5 h-9 md:h-10"
             >
               <Refrigerator size={16} />
