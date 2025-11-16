@@ -55,9 +55,9 @@ app.use('/api', elevenlabsRouter);
 // ---------------- Google Places API (New) endpoint ----------------
 app.post("/api/nearby-stores", async (req, res) => {
   try {
-    // console.log("[NEARBY-STORES] Request received");
+    console.log("[NEARBY-STORES] Request received");
     const { lat, lng } = req.body;
-    // console.log("[NEARBY-STORES] Params:", { lat, lng });
+    console.log("[NEARBY-STORES] Params:", { lat, lng });
     
     if (!lat || !lng) {
       console.error("[NEARBY-STORES] Missing lat or lng");
@@ -65,7 +65,7 @@ app.post("/api/nearby-stores", async (req, res) => {
     }
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-    // console.log("[NEARBY-STORES] API Key present:", !!apiKey);
+    console.log("[NEARBY-STORES] API Key present:", !!apiKey);
     if (!apiKey) {
       console.error("[NEARBY-STORES] No API key configured");
       return res.status(500).json({ error: "Google Maps API key not configured" });
@@ -73,7 +73,7 @@ app.post("/api/nearby-stores", async (req, res) => {
 
     // New Places API endpoint
     const url = `https://places.googleapis.com/v1/places:searchNearby`;
-    // console.log("[NEARBY-STORES] Calling Google Places API (New)");
+    console.log("[NEARBY-STORES] Calling Google Places API (New)");
     
     // Request body for new Places API
     const requestBody = JSON.stringify({
@@ -133,10 +133,10 @@ app.post("/api/nearby-stores", async (req, res) => {
               }))
             };
             
-            // console.log("[NEARBY-STORES] Sending successful response with", transformedData.results.length, "stores");
+            console.log("[NEARBY-STORES] Sending successful response with", transformedData.results.length, "stores");
             res.json(transformedData);
           } else if (apiResponse.statusCode === 200 && !parsedData.places) {
-            // console.log("[NEARBY-STORES] No stores found in area");
+            console.log("[NEARBY-STORES] No stores found in area");
             res.json({ status: "ZERO_RESULTS", results: [] });
           } else {
             console.error("[NEARBY-STORES] Google Places API error:", parsedData);
