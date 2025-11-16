@@ -10,8 +10,87 @@ import {
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
+import { useEffect, useState } from "react";
+import { auth } from "../firebaseConfig";
+import { getHealthPlan, type CategorizationResult } from "../src/utils/healthPlanService";
 
 export default function HealthPlanScreen() {
+  const [healthPlanData, setHealthPlanData] = useState<CategorizationResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadHealthPlan();
+  }, []);
+
+  const loadHealthPlan = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      setError("Please log in to view your health plan");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getHealthPlan(user.uid);
+      setHealthPlanData(data);
+    } catch (err) {
+      console.error("Error loading health plan:", err);
+      setError(err instanceof Error ? err.message : "Failed to load health plan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-full bg-gray-50 pb-20">
+        <div className="bg-gradient-to-br from-purple-600 to-purple-700 px-6 py-8 text-white">
+          <h2 className="text-white mb-1">Your Health Plan</h2>
+          <p className="text-purple-100">
+            Personalized recommendations for better health
+          </p>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading your health plan...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !healthPlanData) {
+    return (
+      <div className="flex flex-col h-full bg-gray-50 pb-20">
+        <div className="bg-gradient-to-br from-purple-600 to-purple-700 px-6 py-8 text-white">
+          <h2 className="text-white mb-1">Your Health Plan</h2>
+          <p className="text-purple-100">
+            Personalized recommendations for better health
+          </p>
+        </div>
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="text-center">
+            <div className="text-gray-400 mb-4 text-4xl">📋</div>
+            <h3 className="text-gray-900 mb-2 font-semibold">No Health Plan Data</h3>
+            <p className="text-gray-600 mb-4">
+              {error || "Upload your medical report and scan your fridge to generate your personalized health plan."}
+            </p>
+            <button
+              onClick={loadHealthPlan}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full bg-gray-50 pb-20">
       {/* Header */}
@@ -57,34 +136,39 @@ export default function HealthPlanScreen() {
             <Heart className="text-red-600" size={20} />
           </div>
           <div className="space-y-3">
-            <div className="flex gap-3 p-3 bg-green-50 rounded-lg">
-              <Activity
-                className="text-green-600 flex-shrink-0 mt-0.5"
-                size={20}
-              />
-              <div>
-                <h4 className="text-gray-900 mb-1">
-                  Blood Pressure Management
-                </h4>
-                <p className="text-gray-700">
-                  Your low-sodium choices this week have been excellent. Keep it
-                  up!
-                </p>
+            {healthPlanData.healthInsights && healthPlanData.healthInsights.length > 0 ? (
+              healthPlanData.healthInsights.map((insight, index) => (
+                <div key={index} className={`flex gap-3 p-3 rounded-lg ${index % 2 === 0 ? 'bg-green-50' : 'bg-blue-50'}`}>
+                  {index % 2 === 0 ? (
+                    <Activity
+                      className="text-green-600 flex-shrink-0 mt-0.5"
+                      size={20}
+                    />
+                  ) : (
+                    <TrendingUp
+                      className="text-blue-600 flex-shrink-0 mt-0.5"
+                      size={20}
+                    />
+                  )}
+                  <div>
+                    <h4 className="text-gray-900 mb-1">
+                      {insight.title}
+                    </h4>
+                    <p className="text-gray-700">
+                      {insight.summary}
+                    </p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex gap-3 p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-gray-600">
+                    No health insights available yet. Upload your medical report and scan your fridge to get personalized insights.
+                  </p>
+                </div>
               </div>
-            </div>
-            <div className="flex gap-3 p-3 bg-blue-50 rounded-lg">
-              <TrendingUp
-                className="text-blue-600 flex-shrink-0 mt-0.5"
-                size={20}
-              />
-              <div>
-                <h4 className="text-gray-900 mb-1">Cholesterol Improvement</h4>
-                <p className="text-gray-700">
-                  Adding more fiber and omega-3 rich foods shows positive
-                  trends.
-                </p>
-              </div>
-            </div>
+            )}
           </div>
         </Card>
 
@@ -111,8 +195,7 @@ export default function HealthPlanScreen() {
                     </Badge>
                   </div>
                   <p className="text-gray-700 mb-2">
-                    Try adding more leafy greens to your meals for better blood
-                    sugar control
+                    {healthPlanData.nutritionTips || "Try adding more leafy greens to your meals for better blood sugar control"}
                   </p>
                   <button className="text-orange-600">Learn More →</button>
                 </div>
@@ -128,8 +211,7 @@ export default function HealthPlanScreen() {
                 <div className="flex-1">
                   <h4 className="text-gray-900 mb-1">Smart Shopping</h4>
                   <p className="text-gray-700 mb-2">
-                    Look for "No Salt Added" labels when buying canned
-                    vegetables
+                    {healthPlanData.smartShopping || "Look for \"No Salt Added\" labels when buying canned vegetables"}
                   </p>
                   <button className="text-blue-600">View Tips →</button>
                 </div>

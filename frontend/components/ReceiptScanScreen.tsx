@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { useEffect, useRef, useState } from "react";
 import { auth } from "../firebaseConfig";
 import { uploadUserFridgeImage } from "../src/utils/uploadService";
+import { analyzeFridge } from "../src/utils/healthPlanService";
 
 interface ReceiptScanScreenProps {
   onBack: () => void;
@@ -92,6 +93,16 @@ export default function ReceiptScanScreen({ onBack, onNavigate }: ReceiptScanScr
       }
 
       await uploadUserFridgeImage(file, currentUser.uid);
+      
+      // Automatically analyze fridge and store ingredients
+      try {
+        await analyzeFridge(currentUser.uid);
+        console.log("Fridge analyzed and ingredients stored successfully");
+      } catch (analyzeErr) {
+        console.error("Fridge analysis error:", analyzeErr);
+        // Don't block user flow if analysis fails
+      }
+      
       alert("Upload successful!");
       onNavigate("recipes"); // redirect after upload
     } catch (err) {

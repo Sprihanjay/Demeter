@@ -6,6 +6,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { uploadPatientSetupInfo, uploadUserMedicalReport } from "../src/utils/uploadService";
 import { auth } from "../firebaseConfig";
+import { processOcr } from "../src/utils/healthPlanService";
 
 interface HealthProfileSetupProps {
   onComplete: () => void;
@@ -98,8 +99,17 @@ export default function HealthProfileSetup({ onComplete }: HealthProfileSetupPro
     await uploadUserMedicalReport(
       file,
       user.uid,
-      (data) => {
+      async (data) => {
         setUploadedFiles((prev) => [...prev, { name: data.name, url: data.url }]);
+        
+        // Automatically process OCR and store results
+        try {
+          await processOcr(user.uid);
+          console.log("Medical report OCR processed and stored successfully");
+        } catch (ocrErr) {
+          console.error("OCR processing error:", ocrErr);
+          // Don't block user flow if OCR fails
+        }
       },
       (error) => {
         console.error("Error uploading medical report:", error);
